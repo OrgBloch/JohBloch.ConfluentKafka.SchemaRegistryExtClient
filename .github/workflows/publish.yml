@@ -1,0 +1,86 @@
+name: Publish NuGet
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v6
+      with:
+        fetch-depth: 0
+
+    - name: Validate release tag (stable SemVer only)
+      shell: bash
+      run: |
+        echo "GITHUB_REF=${GITHUB_REF}"
+        echo "GITHUB_REF_NAME=${GITHUB_REF_NAME}"
+        if [[ ! "${GITHUB_REF}" =~ ^refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          echo "ERROR: This workflow only publishes on stable tags like v1.2.3 (no prerelease)."
+          exit 1
+        fi
+    
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v5
+      with:
+        dotnet-version: 10.0.x
+
+    - name: .NET info
+      shell: bash
+      run: dotnet --info
+        
+    - name: Restore dependencies
+      run: dotnet restore
+      
+    - name: Build
+      run: dotnet build --configuration Release --no-restore /p:ContinuousIntegrationBuild=true
+
+    - name: Inspect native dependencies (bundled librdkafka)
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Searching for librdkafka native binaries..."
+        find . -type f \( -name "librdkafka*.so" -o -name "librdkafka*.so.*" \) -print || true
+        echo "Running ldd (if any were found)..."
+        while IFS= read -r sofile; do
+          echo "--- ldd $sofile ---"
+          ldd "$sofile" || true
+        done < <(find . -type f \( -name "librdkafka*.so" -o -name "librdkafka*.so.*" \) -print)
+      
+    - name: Test
+      env:
+        DOTNET_CLI_TELEMETRY_OPTOUT: '1'
+        DOTNET_NOLOGO: '1'
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p ./TestResults
+        dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
+          --no-build \
+          --configuration Release \
+          --verbosity normal \
+          --results-directory ./TestResults \
+          --diag ./TestResults/vstest.diag.log \
+          --blame-crash \
+          --blame-crash-dump-type full \
+          --blame-hang \
+          --blame-hang-timeout 5m
+
+    - name: Upload TestResults (including blame)
+      if: success() || failure()
+      uses: actions/upload-artifact@v6
+      with:
+        name: testresults
+        path: TestResults/
+      
+    - name: Pack
+      run: dotnet pack ./src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj --configuration Release --no-build --output ./artifacts
+      
+    - name: Push to NuGet
+      run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{secrets.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
+
+    - name: Push Symbols to NuGet
+      run: dotnet nuget push ./artifacts/*.snupkg --api-key ${{secrets.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate
