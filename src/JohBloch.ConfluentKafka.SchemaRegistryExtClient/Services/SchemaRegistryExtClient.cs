@@ -1,7 +1,7 @@
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 
-namespace JohBloch.SchemaRegistryExtClient.Services
+namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
 {
     public class SchemaRegistryExtClient : ISchemaRegistryExtClient
     {
@@ -33,17 +33,18 @@ namespace JohBloch.SchemaRegistryExtClient.Services
         /// </summary>
         public ISchemaRegistrar Registrar => _registrar ??= (_currentClient != null ? CreateRegistrar(_currentClient) : CreateRegistrar(new CachedSchemaRegistryClient(_config)));
 
+        // New constructor that accepts an existing ITokenManager (allows DI to share a single instance)
         public SchemaRegistryExtClient(
             SchemaRegistryConfig config,
-            Func<Task<(string token, DateTime expiresAt)>>? tokenRefreshFunc = null,
+            Interfaces.ITokenManager? tokenManager = null,
             ISchemaCache? cache = null,
             SchemaClientOptions? options = null,
             ISchemaRegistryClientFactory? clientFactory = null)
         {
             _options = options ?? new SchemaClientOptions();
             _logger = _options.Logger as ILogger<SchemaRegistryExtClient>;
-            _useTokenManager = tokenRefreshFunc != null;
-            _tokenManager = _useTokenManager ? new TokenManager(tokenRefreshFunc!) : null; // assigned to ITokenManager
+            _useTokenManager = tokenManager != null;
+            _tokenManager = tokenManager; // reuse DI-registered TokenManager when available
             _cache = cache ?? new InMemorySchemaCache(_options.CacheOptions, _logger as ILogger<InMemorySchemaCache>);
             _config = config;
             _clientFactory = clientFactory ?? new DefaultSchemaRegistryClientFactory();
@@ -62,6 +63,17 @@ namespace JohBloch.SchemaRegistryExtClient.Services
                 _currentClient = new CachedSchemaRegistryClient(_config);
             }
             _logger?.LogInformation("SchemaClient initialized");
+        }
+
+        // Backwards-compatible constructor that accepts a token refresh function and creates an internal TokenManager.
+        public SchemaRegistryExtClient(
+            SchemaRegistryConfig config,
+            Func<Task<(string token, DateTime expiresAt)>>? tokenRefreshFunc = null,
+            ISchemaCache? cache = null,
+            SchemaClientOptions? options = null,
+            ISchemaRegistryClientFactory? clientFactory = null)
+            : this(config, tokenRefreshFunc != null ? new TokenManager(tokenRefreshFunc) as Interfaces.ITokenManager : null, cache, options, clientFactory)
+        {
         }
 
         private readonly SemaphoreSlim _clientLock = new(1,1);

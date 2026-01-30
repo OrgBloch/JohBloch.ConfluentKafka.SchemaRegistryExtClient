@@ -57,17 +57,25 @@ jobs:
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p ./TestResults
+        mkdir -p "$GITHUB_WORKSPACE/TestResults"
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
           --no-build \
           --configuration Release \
           --verbosity normal \
-          --results-directory ./TestResults \
-          --diag ./TestResults/vstest.diag.log \
+          --results-directory "$GITHUB_WORKSPACE/TestResults" \
+          --logger "trx;LogFileName=test-results.trx" \
+          --diag "$GITHUB_WORKSPACE/TestResults/vstest.diag.log" \
           --blame-crash \
           --blame-crash-dump-type full \
           --blame-hang \
           --blame-hang-timeout 5m
+
+    - name: Debug test artifacts
+      run: |
+        echo "List TestResults folder:"
+        ls -la "$GITHUB_WORKSPACE/TestResults" || true
+        echo "Find any .trx files:"
+        find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true
 
     - name: Upload TestResults (including blame)
       if: success() || failure()

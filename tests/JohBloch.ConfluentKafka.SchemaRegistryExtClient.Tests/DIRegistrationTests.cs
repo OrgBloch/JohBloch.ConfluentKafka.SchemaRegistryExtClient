@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Confluent.SchemaRegistry;
 using Xunit;
@@ -7,6 +8,9 @@ using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class DIRegistrationTests
     {
         [Fact]
@@ -17,7 +21,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             services.AddSchemaRegistryExtClient(config);
             var sp = services.BuildServiceProvider();
 
-            var ext = sp.GetRequiredService<SchemaRegistryExtClient>();
+            var ext = sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>();
             var reg1 = sp.GetRequiredService<ISchemaRegistrar>();
             var reg2 = sp.GetRequiredService<ISchemaRegistrar>();
 
@@ -34,7 +38,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             var sp = services.BuildServiceProvider();
 
             var iext = sp.GetRequiredService<ISchemaRegistryExtClient>();
-            var concrete = sp.GetRequiredService<SchemaRegistryExtClient>();
+            var concrete = sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>();
 
             Assert.Same(iext, concrete);
         }
@@ -48,7 +52,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             var sp = services.BuildServiceProvider();
 
             var tm = sp.GetService<ITokenManager>();
-            var ext = sp.GetRequiredService<SchemaRegistryExtClient>();
+            var ext = sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>();
 
             Assert.NotNull(tm);
             Assert.NotNull(ext.TokenManager);
@@ -74,7 +78,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             }
 
             var config = new SchemaRegistryConfig { Url = "http://localhost:8081" };
-            var client = new JohBloch.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, TokenFunc, null, null, factory);
+            var client = new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, TokenFunc, null, null, factory);
 
             var c1 = await client.GetClientAsync();
             Assert.Equal(1, createCount);

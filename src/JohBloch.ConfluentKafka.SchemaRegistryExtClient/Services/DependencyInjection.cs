@@ -38,17 +38,21 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
             }
 
             // Register the extended client as the main service (singleton) so it can manage token refresh and registrar reuse
-            services.AddSingleton<JohBloch.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>(sp => new JohBloch.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, tokenRefreshFunc, sp.GetRequiredService<ISchemaCache>(), options, sp.GetRequiredService<ISchemaRegistryClientFactory>()));
-
-            // Expose common interfaces
-            services.AddSingleton<ISchemaRegistryExtClient>(sp => sp.GetRequiredService<JohBloch.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>());
-            services.AddSingleton<ISchemaRegistrar>(sp => sp.GetRequiredService<JohBloch.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>().Registrar);
-
-            // If TokenManager was registered, expose it
             if (tokenRefreshFunc != null)
             {
-                services.AddSingleton(sp => sp.GetRequiredService<ITokenManager>());
+                // Use the registered ITokenManager instance so DI and the client share the same instance
+                services.AddSingleton<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>(sp => new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, sp.GetRequiredService<ITokenManager>(), sp.GetRequiredService<ISchemaCache>(), options, sp.GetRequiredService<ISchemaRegistryClientFactory>()));
             }
+            else
+            {
+                services.AddSingleton<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>(sp => new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, (Interfaces.ITokenManager?)null, sp.GetRequiredService<ISchemaCache>(), options, sp.GetRequiredService<ISchemaRegistryClientFactory>()));
+            }
+
+            // Expose common interfaces
+            services.AddSingleton<ISchemaRegistryExtClient>(sp => sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>());
+            services.AddSingleton<ISchemaRegistrar>(sp => sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>().Registrar);
+
+            // If TokenManager was registered, it's already exposed above; avoid circular registration.
             return services;
         }
     }

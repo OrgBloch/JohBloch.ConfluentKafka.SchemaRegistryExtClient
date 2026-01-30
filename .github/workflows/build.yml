@@ -92,12 +92,12 @@ jobs:
         DOTNET_NOLOGO: '1'
       run: |
         set -euo pipefail
-        mkdir -p ./TestResults
+        mkdir -p "$GITHUB_WORKSPACE/TestResults"
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
           --no-build \
           --configuration Release \
           --verbosity normal \
-          --results-directory ./TestResults \
+          --results-directory "$GITHUB_WORKSPACE/TestResults" \
           --logger "trx;LogFileName=test-results.trx"
 
     - name: Test (diagnostics on failure)
@@ -109,18 +109,26 @@ jobs:
         DOTNET_NOLOGO: '1'
       run: |
         set -euo pipefail
-        mkdir -p ./TestResults
+        mkdir -p "$GITHUB_WORKSPACE/TestResults"
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
           --no-build \
           --configuration Release \
           --verbosity diagnostic \
-          --results-directory ./TestResults \
+          --results-directory "$GITHUB_WORKSPACE/TestResults" \
           --logger "trx;LogFileName=test-results.diag.trx" \
-          --diag ./TestResults/vstest.diag.log \
+          --diag "$GITHUB_WORKSPACE/TestResults/vstest.diag.log" \
           --blame-crash \
           --blame-crash-dump-type full \
           --blame-hang \
           --blame-hang-timeout 5m
+
+    - name: Debug test artifacts
+      run: |
+        echo "GITHUB_WORKSPACE: $GITHUB_WORKSPACE"
+        echo "List TestResults folder:"
+        ls -la "$GITHUB_WORKSPACE/TestResults" || true
+        echo "Find any .trx files:"
+        find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true
 
     - name: Inspect crash dump (strings)
       if: steps.test_normal.outcome == 'failure'

@@ -46,7 +46,8 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
         public async Task<string> GetTokenAndRefreshIfNeededAsync()
         {
             var threshold = TimeSpan.FromMinutes(1);
-            if (DateTime.UtcNow >= _expiresAt - threshold)
+            // Avoid subtracting from MinValue which would throw; treat MinValue as expired
+            if (_expiresAt == DateTime.MinValue || DateTime.UtcNow >= _expiresAt - threshold)
             {
                 await RefreshTokenAsync();
             }

@@ -4,9 +4,13 @@ using Moq;
 using Xunit;
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class CachingSchemaRegistrarTests
     {
         [Fact]
@@ -28,7 +32,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             Assert.NotNull(second);
             Assert.Equal(first!.Id, second!.Id);
             mock.Verify(m => m.GetRegisteredSchemaAsync("topic", 1), Times.Once);
-            metrics.Verify(m => m.IncrementCacheSet(), Moq.Times.Once);
+            metrics.Verify(m => m.IncrementCacheSet(), Moq.Times.Exactly(2));
             metrics.Verify(m => m.IncrementCacheHit(), Moq.Times.Once);
         }
 

@@ -1,9 +1,12 @@
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
-using JohBloch.SchemaRegistryExtClient.Services;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
 using Xunit;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class SubjectNameStrategyTests
     {
         [Theory]
@@ -24,7 +27,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
         {
             var config = new Confluent.SchemaRegistry.SchemaRegistryConfig { Url = "http://localhost" };
             var options = new Models.SchemaClientOptions { SubjectNameStrategy = strategy };
-            var client = new SchemaRegistryExtClient(config, null, null, options);
+            var client = new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(config, null, null, options);
 
             var result = client.GetSubjectName(topic, type, recordType);
 

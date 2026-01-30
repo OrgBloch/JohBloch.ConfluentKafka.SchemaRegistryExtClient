@@ -10,5 +10,10 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces
         /// </summary>
         /// <returns>Access token as string, or null if unavailable.</returns>
         Task<string?> GetTokenAsync();
+
+        /// <summary>
+        /// Force an immediate token refresh.
+        /// </summary>
+        Task ForceRefreshAsync();
     }
 }

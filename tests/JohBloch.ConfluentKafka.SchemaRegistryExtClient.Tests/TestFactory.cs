@@ -1,3 +1,4 @@
+using System;
 using Confluent.SchemaRegistry;
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 
