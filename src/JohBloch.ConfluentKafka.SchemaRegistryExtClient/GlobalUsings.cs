@@ -1,0 +1,15 @@
+global using System;
+global using System.ComponentModel;
+global using System.Collections.Concurrent;
+global using System.Collections.Generic;
+global using System.Linq;
+global using System.Threading;
+global using System.Threading.Tasks;
+global using Microsoft.Extensions.Logging;
+global using Microsoft.Extensions.Options;
+global using Microsoft.Extensions.Configuration;
+global using Confluent.SchemaRegistry;
+global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
+global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
+global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
+
