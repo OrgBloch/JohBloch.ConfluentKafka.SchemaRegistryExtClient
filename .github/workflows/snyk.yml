@@ -25,19 +25,22 @@ jobs:
     - name: Restore dependencies
       run: dotnet restore
 
+    - name: Setup Snyk CLI
+      uses: snyk/actions/setup@v1
+
     - name: Run Snyk to check for vulnerabilities
-      uses: snyk/actions/dotnet@v1
+      shell: bash
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        command: test
-        args: --file=src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj --severity-threshold=high
+      run: |
+        set -euo pipefail
+        snyk test --file=src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj --severity-threshold=high
 
     - name: Snyk monitor (snapshot on main)
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      uses: snyk/actions/dotnet@v1
+      shell: bash
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      with:
-        command: monitor
-        args: --file=src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj
+      run: |
+        set -euo pipefail
+        snyk monitor --file=src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj
