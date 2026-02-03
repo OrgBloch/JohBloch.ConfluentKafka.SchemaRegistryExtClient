@@ -58,7 +58,7 @@ OAuth2 (Client Credentials):
     "OAUTH_CLIENT_SECRET": "your-client-secret",
     "OAUTH_SCOPE": "registry.write",
     "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
-    "OAUTH_LOGICAL_POOL_ID": "pool-xxxxx"
+    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx"
   }
 }
 ```
@@ -89,7 +89,7 @@ var options = new SchemaClientOptions
 {
   // Required for some Confluent Cloud OAuth setups
   LogicalCluster = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_CLUSTER"),
-  LogicalPoolId = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_POOL_ID")
+  IdentityPoolId = Environment.GetEnvironmentVariable("OAUTH_IDENTITY_POOL_ID")
 };
 
 async Task<(string token, DateTime expiresAt)> TokenRefreshAsync()

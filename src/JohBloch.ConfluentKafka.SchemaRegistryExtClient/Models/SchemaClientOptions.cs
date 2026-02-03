@@ -16,12 +16,13 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models
         /// Optional: Confluent Cloud logical pool id (a.k.a. identity pool id) used with OAuth (OAUTHBEARER).
         /// When provided, the client will set Schema Registry config key 'bearer.auth.identity.pool.id'.
         /// </summary>
-        public string? LogicalPoolId { get; set; }
+        public string? IdentityPoolId { get; set; }
 
         /// <summary>
-        /// Optional alias for <see cref="LogicalPoolId"/>.
+        /// Optional alias for <see cref="IdentityPoolId"/>.
+        /// Some documentation refers to this value as the logical pool id.
         /// </summary>
-        public string? IdentityPoolId { get => LogicalPoolId; set => LogicalPoolId = value; }
+        public string? LogicalPoolId { get => IdentityPoolId; set => IdentityPoolId = value; }
 
         /// <summary>
         /// Optional subject name strategy that aligns with serializer configuration

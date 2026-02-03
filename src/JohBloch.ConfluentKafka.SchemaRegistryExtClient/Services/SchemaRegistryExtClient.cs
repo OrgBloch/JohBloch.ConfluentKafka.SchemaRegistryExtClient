@@ -53,9 +53,9 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
             {
                 _config.Set("bearer.auth.logical.cluster", _options.LogicalCluster);
             }
-            if (!string.IsNullOrWhiteSpace(_options.LogicalPoolId))
+            if (!string.IsNullOrWhiteSpace(_options.IdentityPoolId))
             {
-                _config.Set("bearer.auth.identity.pool.id", _options.LogicalPoolId);
+                _config.Set("bearer.auth.identity.pool.id", _options.IdentityPoolId);
             }
 
             _clientFactory = clientFactory ?? new DefaultSchemaRegistryClientFactory();
