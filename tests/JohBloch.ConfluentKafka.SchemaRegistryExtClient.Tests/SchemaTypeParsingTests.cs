@@ -20,7 +20,11 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
         [InlineData("INVALID", SchemaType.Avro)]
         public void ParseSchemaType_HandlesKnownValues(string? input, SchemaType expected)
         {
-            var client = new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(new SchemaRegistryConfig { Url = "http://localhost" }, null, null, null);
+            var client = new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(
+                new SchemaRegistryConfig { Url = "http://localhost" },
+                tokenManager: null,
+                cache: null,
+                options: null);
             var parsed = client.ParseSchemaType(input);
             Assert.Equal(expected, parsed);
         }

@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-      DOTNET_PROJECT: src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj
+      DOTNET_SOLUTION: JohBloch.ConfluentKafka.SchemaRegistryExtClient.sln
 
     steps:
     - uses: actions/checkout@v4
@@ -24,7 +24,7 @@ jobs:
         dotnet-version: 10.0.x
 
     - name: Restore dependencies
-      run: dotnet restore "${DOTNET_PROJECT}"
+      run: dotnet restore "${DOTNET_SOLUTION}"
 
     - name: Setup Snyk CLI
       uses: snyk/actions/setup@v1
@@ -35,7 +35,7 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
         set -euo pipefail
-        snyk test --file="${DOTNET_PROJECT}" --package-manager=nuget --severity-threshold=high
+        snyk test --file="${DOTNET_SOLUTION}" --package-manager=nuget --severity-threshold=high
 
     - name: Snyk monitor (snapshot on main)
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
@@ -44,4 +44,4 @@ jobs:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       run: |
         set -euo pipefail
-        snyk monitor --file="${DOTNET_PROJECT}" --package-manager=nuget
+        snyk monitor --file="${DOTNET_SOLUTION}" --package-manager=nuget
