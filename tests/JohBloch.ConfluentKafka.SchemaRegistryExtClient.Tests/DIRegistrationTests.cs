@@ -44,19 +44,38 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
         }
 
         [Fact]
-        public void TokenManager_Is_Registered_When_TokenFunc_Provided()
+        public async Task TokenManager_Is_Registered_When_TokenFunc_Provided()
         {
+            Console.WriteLine("[DI test] starting: creating services");
             var services = new ServiceCollection();
             var config = new SchemaRegistryConfig { Url = "http://localhost:8081" };
-            services.AddSchemaRegistryExtClient(config, async () => ("t", DateTime.UtcNow.AddMinutes(10)));
-            var sp = services.BuildServiceProvider();
+            // Use a simple, non-async token provider to avoid async state machine issues during DI construction.
+            Console.WriteLine("[DI test] calling AddSchemaRegistryExtClient");
+            services.AddSchemaRegistryExtClient(config, () => Task.FromResult(("t", DateTime.UtcNow.AddMinutes(10))));
+            Console.WriteLine("[DI test] AddSchemaRegistryExtClient returned");
 
+            // Build the ServiceProvider on a background thread and fail fast if it does not complete within 10s.
+            Console.WriteLine("[DI test] starting BuildServiceProvider on background task");
+            var buildTask = Task.Run(() => services.BuildServiceProvider());
+            var completed = await Task.WhenAny(buildTask, Task.Delay(TimeSpan.FromSeconds(10)));
+            if (completed != buildTask)
+            {
+                Console.WriteLine("[DI test] BuildServiceProvider timed out");
+                throw new TimeoutException("Building the ServiceProvider timed out (possible DI hang).");
+            }
+
+            Console.WriteLine("[DI test] BuildServiceProvider completed");
+            var sp = buildTask.Result;
+
+            Console.WriteLine("[DI test] retrieving services from ServiceProvider");
             var tm = sp.GetService<ITokenManager>();
             var ext = sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>();
 
+            Console.WriteLine("[DI test] retrieved services");
             Assert.NotNull(tm);
             Assert.NotNull(ext.TokenManager);
             Assert.Same(tm, ext.TokenManager);
+            Console.WriteLine("[DI test] assertions passed");
         }
 
         [Fact]
