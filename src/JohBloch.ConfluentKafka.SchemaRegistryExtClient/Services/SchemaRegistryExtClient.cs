@@ -47,6 +47,17 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
             _tokenManager = tokenManager; // reuse DI-registered TokenManager when available
             _cache = cache ?? new InMemorySchemaCache(_options.CacheOptions, _logger as ILogger<InMemorySchemaCache>);
             _config = config;
+
+            // Confluent Cloud OAuth extensions (optional). These are required for some Confluent Cloud OAuth setups.
+            if (!string.IsNullOrWhiteSpace(_options.LogicalCluster))
+            {
+                _config.Set("bearer.auth.logical.cluster", _options.LogicalCluster);
+            }
+            if (!string.IsNullOrWhiteSpace(_options.LogicalPoolId))
+            {
+                _config.Set("bearer.auth.identity.pool.id", _options.LogicalPoolId);
+            }
+
             _clientFactory = clientFactory ?? new DefaultSchemaRegistryClientFactory();
             // Resolve subject naming strategy implementation (explicit impl takes precedence)
             _subjectNameStrategy = _options.SubjectNameStrategyImplementation ?? (_options.SubjectNameStrategy.HasValue ? _options.SubjectNameStrategy.Value switch

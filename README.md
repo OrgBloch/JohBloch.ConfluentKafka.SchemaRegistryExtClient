@@ -56,7 +56,9 @@ OAuth2 (Client Credentials):
     "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
     "OAUTH_CLIENT_ID": "your-client-id",
     "OAUTH_CLIENT_SECRET": "your-client-secret",
-    "OAUTH_SCOPE": "registry.write"
+    "OAUTH_SCOPE": "registry.write",
+    "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
+    "OAUTH_LOGICAL_POOL_ID": "pool-xxxxx"
   }
 }
 ```
@@ -83,6 +85,13 @@ using System.Text.Json;
 
 var config = new SchemaRegistryConfig { Url = "https://your-registry.example.com" };
 
+var options = new SchemaClientOptions
+{
+  // Required for some Confluent Cloud OAuth setups
+  LogicalCluster = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_CLUSTER"),
+  LogicalPoolId = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_POOL_ID")
+};
+
 async Task<(string token, DateTime expiresAt)> TokenRefreshAsync()
 {
     using var http = new HttpClient();
@@ -104,7 +113,7 @@ async Task<(string token, DateTime expiresAt)> TokenRefreshAsync()
 }
 
 // Pass the token refresh func when constructing the client — the client will call it as needed
-var client = new SchemaRegistryExtClient(config, TokenRefreshAsync);
+var client = new SchemaRegistryExtClient(config, TokenRefreshAsync, cache: null, options: options);
 ```
 
 > Tip: You can also use MSAL or IdentityModel to get tokens and expose a `Func<Task<(string token, DateTime expiresAt)>>` accordingly.

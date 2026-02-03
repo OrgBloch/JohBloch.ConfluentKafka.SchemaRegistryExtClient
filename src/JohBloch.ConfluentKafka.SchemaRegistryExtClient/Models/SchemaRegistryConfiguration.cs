@@ -83,6 +83,12 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryClient.Models
         public string? IdentityPoolId { get; set; }
 
         /// <summary>
+        /// Optional alias for <see cref="IdentityPoolId"/>.
+        /// Some documentation refers to this value as the logical pool id.
+        /// </summary>
+        public string? LogicalPoolId { get => IdentityPoolId; set => IdentityPoolId = value; }
+
+        /// <summary>
         /// Optional: Scope (alias for OAuthScopes).
         /// </summary>
         public string? Scope { get => OAuthScopes; set => OAuthScopes = value; }
