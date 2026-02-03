@@ -92,12 +92,12 @@ jobs:
         DOTNET_NOLOGO: '1'
       run: |
         set -euo pipefail
-        mkdir -p "$GITHUB_WORKSPACE/TestResults"
+        mkdir -p TestResults
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
           --no-build \
           --configuration Release \
           --verbosity normal \
-          --results-directory "$GITHUB_WORKSPACE/TestResults" \
+          --results-directory TestResults \
           --logger "trx;LogFileName=test-results.trx" \
           --filter "FullyQualifiedName!=JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.TokenManager_Is_Registered_When_TokenFunc_Provided"
 
@@ -110,14 +110,14 @@ jobs:
         DOTNET_NOLOGO: '1'
       run: |
         set -euo pipefail
-        mkdir -p "$GITHUB_WORKSPACE/TestResults"
+        mkdir -p TestResults
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
           --no-build \
           --configuration Release \
           --verbosity diagnostic \
-          --results-directory "$GITHUB_WORKSPACE/TestResults" \
+          --results-directory TestResults \
           --logger "trx;LogFileName=test-results.diag.trx" \
-          --diag "$GITHUB_WORKSPACE/TestResults/vstest.diag.log" \
+          --diag "TestResults/vstest.diag.log" \
           --blame-crash \
           --blame-crash-dump-type full \
           --blame-hang \
@@ -195,7 +195,7 @@ jobs:
       if: success() || failure()
       with:
         name: Test Results
-        path: 'TestResults/**/*.trx'
+        path: '**/*.trx'
         reporter: dotnet-trx
 
     - name: Upload TestResults (including blame)
