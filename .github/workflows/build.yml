@@ -195,7 +195,7 @@ jobs:
       if: success() || failure()
       with:
         name: Test Results
-        path: '**/TestResults/**/*.trx'
+        path: 'TestResults/**/*.trx'
         reporter: dotnet-trx
 
     - name: Upload TestResults (including blame)
@@ -203,7 +203,7 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: testresults
-        path: '**/TestResults/**'
+        path: TestResults/
 
     - name: Fail if tests failed
       if: steps.test_normal.outcome == 'failure'
