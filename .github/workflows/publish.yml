@@ -22,6 +22,14 @@ jobs:
           echo "ERROR: This workflow only publishes on stable tags like v1.2.3 (no prerelease)."
           exit 1
         fi
+
+    - name: Determine package version
+      shell: bash
+      run: |
+        set -euo pipefail
+        VERSION="${GITHUB_REF_NAME#v}"
+        echo "VERSION=${VERSION}" >> "$GITHUB_ENV"
+        echo "Package version: ${VERSION}"
     
     - name: Setup .NET
       uses: actions/setup-dotnet@v5
@@ -36,7 +44,7 @@ jobs:
       run: dotnet restore
       
     - name: Build
-      run: dotnet build --configuration Release --no-restore /p:ContinuousIntegrationBuild=true
+      run: dotnet build --configuration Release --no-restore /p:ContinuousIntegrationBuild=true -p:Version=${VERSION} -p:PackageVersion=${VERSION}
 
     - name: Inspect native dependencies (bundled librdkafka)
       shell: bash
@@ -113,7 +121,7 @@ jobs:
         path: TestResults/
       
     - name: Pack
-      run: dotnet pack ./src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj --configuration Release --no-build --output ./artifacts
+      run: dotnet pack ./src/JohBloch.ConfluentKafka.SchemaRegistryExtClient/JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj --configuration Release --no-build --output ./artifacts -p:Version=${VERSION} -p:PackageVersion=${VERSION} -p:IncludeSymbols=true -p:SymbolPackageFormat=snupkg
       
     - name: Push to NuGet
       run: dotnet nuget push ./artifacts/*.nupkg --api-key ${{secrets.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json --skip-duplicate

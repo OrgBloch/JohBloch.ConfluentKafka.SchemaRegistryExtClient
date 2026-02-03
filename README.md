@@ -1,10 +1,13 @@
-# JohBloch.ConfluentKafka.SchemaRegistryClient
+# JohBloch.ConfluentKafka.SchemaRegistryExtClient
 
-Client library for Confluent Kafka Schema Registry.
+Extended client library for Confluent Kafka Schema Registry with DI integration, caching, token refresh support, and optional OpenTelemetry metrics.
 
 ## Features
-- .NET Standard support
-- Easy integration with Kafka
+- Targets `net8.0` and `net10.0`
+- Easy integration with Microsoft DI (`AddSchemaRegistryExtClient`)
+- Optional token refresh (OAuth/custom bearer token) via delegate or DI-provided `ITokenManager`
+- Subject naming strategies aligned with Confluent serializer configuration
+- Optional OpenTelemetry-compatible metrics
 
 ## Getting Started
 See [docs/usage.md](docs/usage.md) for examples of connecting to Schema Registry with API Key, OAuth, or custom token refresh.
@@ -28,6 +31,8 @@ var options = new SchemaClientOptions
 var client = new SchemaRegistryExtClient(config, tokenRefreshFunc, cache, options);
 ```
 
+If you need custom subject naming logic, you can provide a concrete implementation via `SchemaClientOptions.SubjectNameStrategyImplementation` (this takes precedence over the enum).
+
 If you are using Confluent serializers, ensure the serializer's `subject.name.strategy` setting matches this option to avoid subject mismatches.
 
 ## Supported Authentication Methods
@@ -37,13 +42,55 @@ If you are using Confluent serializers, ensure the serializer's `subject.name.st
 
 ## Usage examples (🔐 Authentication)
 
+### local.settings.json templates
+
+If you're using Azure Functions (or another host that supports `local.settings.json`-style local secrets), here are ready-to-use templates for the two most common setups.
+
+OAuth2 (Client Credentials):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SCHEMA_REGISTRY_URL": "https://your-registry.example.com",
+    "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
+    "OAUTH_CLIENT_ID": "your-client-id",
+    "OAUTH_CLIENT_SECRET": "your-client-secret",
+    "OAUTH_SCOPE": "registry.write",
+    "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
+    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx"
+  }
+}
+```
+
+API Key (Confluent Cloud / Basic Auth):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SCHEMA_REGISTRY_URL": "https://your-confluent-cloud-registry",
+    "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",
+    "SCHEMA_REGISTRY_API_SECRET": "<API_SECRET>"
+  }
+}
+```
+
 ### 1) OAuth2 (Client Credentials / Bearer token)
 
 ```csharp
 // Minimal example using a token refresh function (client credentials flow)
 using System.Net.Http.Json;
+using System.Text.Json;
 
 var config = new SchemaRegistryConfig { Url = "https://your-registry.example.com" };
+
+var options = new SchemaClientOptions
+{
+  // Required for some Confluent Cloud OAuth setups
+  LogicalCluster = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_CLUSTER"),
+  IdentityPoolId = Environment.GetEnvironmentVariable("OAUTH_IDENTITY_POOL_ID")
+};
 
 async Task<(string token, DateTime expiresAt)> TokenRefreshAsync()
 {
@@ -66,25 +113,12 @@ async Task<(string token, DateTime expiresAt)> TokenRefreshAsync()
 }
 
 // Pass the token refresh func when constructing the client — the client will call it as needed
-var client = new SchemaRegistryExtClient(config, TokenRefreshAsync);
+var client = new SchemaRegistryExtClient(config, TokenRefreshAsync, cache: null, options: options);
 ```
 
 > Tip: You can also use MSAL or IdentityModel to get tokens and expose a `Func<Task<(string token, DateTime expiresAt)>>` accordingly.
 
-Local.settings.json example (OAuth):
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "SCHEMA_REGISTRY_URL": "https://your-registry.example.com",
-    "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
-    "OAUTH_CLIENT_ID": "your-client-id",
-    "OAUTH_CLIENT_SECRET": "your-client-secret",
-    "OAUTH_SCOPE": "registry.write"
-  }
-}
-```
+See the "local.settings.json templates" section above.
 
 Use these values in your token refresh implementation (or load them into environment variables before running tests/app):
 
@@ -107,33 +141,9 @@ config.Set("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 var client = new SchemaRegistryExtClient(config);
 ```
 
-Local.settings.json example (API Key):
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "SCHEMA_REGISTRY_URL": "https://your-confluent-cloud-registry",
-    "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",
-    "SCHEMA_REGISTRY_API_SECRET": "<API_SECRET>"
-  }
-}
-```
+See the "local.settings.json templates" section above.
 
 To use the local settings values for the API key sample, either set `BasicAuthUserInfo` from the `SCHEMA_REGISTRY_API_KEY`/`SCHEMA_REGISTRY_API_SECRET` environment variables, or load them into the environment using the PowerShell/Bash examples above.
-### 2) API Key (Confluent Cloud / Basic Auth)
-
-```csharp
-// Confluent Cloud: use the API key and secret as basic auth credentials
-var config = new SchemaRegistryConfig { Url = "https://your-confluent-cloud-registry" };
-// Option A: set BasicAuthUserInfo property
-config.BasicAuthUserInfo = "<API_KEY>:<API_SECRET>";
-
-// Option B: set via config.Set
-config.Set("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
-
-var client = new SchemaRegistryExtClient(config);
-```
 
 ---
 

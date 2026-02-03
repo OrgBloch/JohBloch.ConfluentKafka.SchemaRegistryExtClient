@@ -5,6 +5,25 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models
     {
         public SchemaCacheOptions? CacheOptions { get; set; } = new SchemaCacheOptions();
         public ILogger? Logger { get; set; }
+
+        /// <summary>
+        /// Optional: Confluent Cloud logical cluster identifier used with OAuth (OAUTHBEARER).
+        /// When provided, the client will set Schema Registry config key 'bearer.auth.logical.cluster'.
+        /// </summary>
+        public string? LogicalCluster { get; set; }
+
+        /// <summary>
+        /// Optional: Confluent Cloud logical pool id (a.k.a. identity pool id) used with OAuth (OAUTHBEARER).
+        /// When provided, the client will set Schema Registry config key 'bearer.auth.identity.pool.id'.
+        /// </summary>
+        public string? IdentityPoolId { get; set; }
+
+        /// <summary>
+        /// Optional alias for <see cref="IdentityPoolId"/>.
+        /// Some documentation refers to this value as the logical pool id.
+        /// </summary>
+        public string? LogicalPoolId { get => IdentityPoolId; set => IdentityPoolId = value; }
+
         /// <summary>
         /// Optional subject name strategy that aligns with serializer configuration
         /// (equivalent to serializer config 'subject.name.strategy'). If null, legacy behavior is used
