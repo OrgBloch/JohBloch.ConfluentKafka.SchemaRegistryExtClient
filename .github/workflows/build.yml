@@ -132,6 +132,24 @@ jobs:
         echo "Find any .trx files:"
         find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true
 
+    - name: Gather TRX files into canonical TestResults
+      shell: bash
+      run: |
+        set -euo pipefail
+        mkdir -p "$GITHUB_WORKSPACE/TestResults"
+        echo "Searching for .trx files in workspace..."
+        mapfile -t files < <(find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true)
+        if [ ${#files[@]} -eq 0 ]; then
+          echo "No .trx files found"
+        else
+          echo "Copying ${#files[@]} .trx file(s) to $GITHUB_WORKSPACE/TestResults"
+          for f in "${files[@]}"; do
+            echo " - $f"
+            cp "$f" "$GITHUB_WORKSPACE/TestResults/$(basename "$f")" || true
+          done
+          echo "Destination contents:" ; ls -la "$GITHUB_WORKSPACE/TestResults" || true
+        fi
+
     - name: Inspect crash dump (strings)
       if: steps.test_normal.outcome == 'failure'
       continue-on-error: true
