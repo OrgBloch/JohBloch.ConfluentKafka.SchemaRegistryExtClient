@@ -1,0 +1,64 @@
+name: Security (Snyk)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  snyk:
+    runs-on: ubuntu-latest
+    env:
+      SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      DOTNET_SOLUTION: JohBloch.ConfluentKafka.SchemaRegistryExtClient.sln
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Setup .NET
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 10.0.x
+
+    - name: Restore dependencies
+      run: dotnet restore "${DOTNET_SOLUTION}"
+
+    - name: Setup Snyk CLI
+      if: env.SNYK_TOKEN != ''
+      uses: snyk/actions/setup@v1
+
+    - name: Snyk skipped (no token)
+      if: env.SNYK_TOKEN == ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "Snyk is skipped because SNYK_TOKEN is not available in this workflow run."
+        echo "This is expected for pull requests from forks (GitHub does not pass repository secrets)."
+
+    - name: Authenticate Snyk CLI
+      if: env.SNYK_TOKEN != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        snyk auth "${SNYK_TOKEN}"
+
+    - name: Snyk test (dependencies)
+      if: env.SNYK_TOKEN != ''
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: |
+        set -euo pipefail
+        snyk test --file="${DOTNET_SOLUTION}" --package-manager=nuget --severity-threshold=high
+
+    - name: Snyk monitor (snapshot on main)
+      if: env.SNYK_TOKEN != '' && github.ref == 'refs/heads/main' && github.event_name == 'push'
+      shell: bash
+      env:
+        SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+      run: |
+        set -euo pipefail
+        snyk monitor --file="${DOTNET_SOLUTION}" --package-manager=nuget

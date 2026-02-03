@@ -8,6 +8,9 @@ using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class SchemaRegistryIntegrationTests
     {
         // These tests are skipped unless SCHEMA_REGISTRY_URL is provided in the environment
@@ -24,10 +27,10 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             var url = Environment.GetEnvironmentVariable("SCHEMA_REGISTRY_URL")!;
             var config = new SchemaRegistryConfig { Url = url };
             var services = new ServiceCollection();
-            services.AddSchemaRegistryExtClient(config);
+            JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.ServiceCollectionExtensions.AddSchemaRegistryExtClient(services, config);
             var sp = services.BuildServiceProvider();
 
-            var client = sp.GetRequiredService<ISchemaRegistryExtClient>();
+            var client = sp.GetRequiredService<JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient>();
 
             var subject = $"test-topic-{Guid.NewGuid():N}-value";
             var schema = "{\"type\":\"string\"}";
@@ -38,7 +41,7 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             var fetched = await client.GetSchemaAsync(subject, 1);
             Assert.Equal(schema, fetched);
 
-            await client.DeleteSchemaVersionAsync(subject, 1);
+            await client.Registrar.DeleteSchemaVersionAsync(subject, 1);
 
             var afterDelete = await client.GetSchemaAsync(subject, 1);
             Assert.Null(afterDelete);

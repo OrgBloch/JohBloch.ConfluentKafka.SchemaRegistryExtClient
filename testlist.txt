@@ -1,0 +1,32 @@
+Test run for C:\projects\JohBloch.ConfluentKafka.SchemaRegistryExtClient\tests\JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests\bin\Debug\net10.0\JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.dll (.NETCoreApp,Version=v10.0)
+VSTest version 18.0.1 (x64)
+
+The following Tests are available:
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.CachingSchemaRegistrarTests.GetRegisteredSchemaAsync_CachesResult
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.CachingSchemaRegistrarTests.RegisterSchemaAsync_UpdatesCache
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.CachingSchemaRegistrarTests.DeleteSchemaVersionAsync_InvalidatesCache
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.CachingSchemaRegistrarTests.GetRegisteredSchemaAsync_NegativeCaching
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.CustomSubjectStrategyTests.CustomStrategy_IsUsedWhenProvided
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.Registrar_Is_Same_Instance_When_Resolved_From_DI
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.ExtClient_Is_Registered_As_Interface_Singleton
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.TokenManager_Is_Registered_When_TokenFunc_Provided
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.Client_Recreates_On_Token_Refresh
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.OpenTelemetryMetricsCollectorTests.Counters_Increment
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaRegistryIntegrationTests.Register_Get_Delete_EndToEnd
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "AVRO", expected: Avro)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "avro", expected: Avro)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "PROTOBUF", expected: Protobuf)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "protobuf", expected: Protobuf)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "JSON", expected: Json)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: null, expected: Avro)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "", expected: Avro)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SchemaTypeParsingTests.ParseSchemaType_HandlesKnownValues(input: "INVALID", expected: Avro)
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: RecordName, topic: "my-topic", type: "key", recordType: "MyRecord", expected: "MyRecord")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: RecordName, topic: "my-topic", type: "value", recordType: "MyRecord", expected: "MyRecord")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: TopicRecordName, topic: "my-topic", type: "key", recordType: "MyRecord", expected: "my-topic-MyRecord")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: TopicRecordName, topic: "my-topic", type: "value", recordType: "MyRecord", expected: "my-topic-MyRecord")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: TopicName, topic: "my-topic", type: "key", recordType: null, expected: "my-topic-key")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: TopicName, topic: "my-topic", type: "value", recordType: null, expected: "my-topic-value")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: null, topic: "my-topic", type: "key", recordType: "MyRecord", expected: "my-topic-MyRecord")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: null, topic: "my-topic", type: "key", recordType: null, expected: "my-topic-key")
+    JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.SubjectNameStrategyTests.GetSubjectName_HonorsStrategy(strategy: null, topic: "my-topic", type: "value", recordType: null, expected: "my-topic-value")

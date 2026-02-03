@@ -1,9 +1,12 @@
 using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
-using JohBloch.SchemaRegistryExtClient.Services;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
 using Xunit;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class CustomSubjectStrategyTests
     {
         private class FixedStrategy : ISubjectNameStrategy
@@ -17,7 +20,11 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
         public void CustomStrategy_IsUsedWhenProvided()
         {
             var options = new SchemaClientOptions { SubjectNameStrategyImplementation = new FixedStrategy("my-fixed-subject") };
-            var client = new SchemaRegistryExtClient(new Confluent.SchemaRegistry.SchemaRegistryConfig { Url = "http://localhost" }, null, null, options);
+            var client = new JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient(
+                new Confluent.SchemaRegistry.SchemaRegistryConfig { Url = "http://localhost" },
+                tokenManager: null,
+                cache: null,
+                options: options);
 
             var subject = client.GetSubjectName("orders", "value", "OrderValue");
 

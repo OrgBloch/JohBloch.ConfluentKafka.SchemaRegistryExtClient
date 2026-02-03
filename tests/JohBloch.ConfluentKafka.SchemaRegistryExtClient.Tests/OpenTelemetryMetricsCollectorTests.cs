@@ -4,6 +4,9 @@ using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
 
 namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
 {
+    using Helpers;
+
+    [LogTestName]
     public class OpenTelemetryMetricsCollectorTests
     {
         [Fact]
