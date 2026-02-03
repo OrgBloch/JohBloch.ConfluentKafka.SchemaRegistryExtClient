@@ -26,7 +26,7 @@ jobs:
       run: dotnet restore
 
     - name: Run Snyk to check for vulnerabilities
-      uses: snyk/actions/dotnet@v3
+      uses: snyk/actions/dotnet@v1
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
@@ -35,7 +35,7 @@ jobs:
 
     - name: Snyk monitor (snapshot on main)
       if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-      uses: snyk/actions/dotnet@v3
+      uses: snyk/actions/dotnet@v1
       env:
         SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
       with:
