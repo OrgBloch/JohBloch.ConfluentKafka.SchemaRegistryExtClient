@@ -23,7 +23,9 @@ Example `local.settings.json` (OAuth):
     "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
     "OAUTH_CLIENT_ID": "your-client-id",
     "OAUTH_CLIENT_SECRET": "your-client-secret",
-    "OAUTH_SCOPE": "registry.write"
+    "OAUTH_SCOPE": "registry.write",
+    "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
+    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx"
   }
 }
 ```
