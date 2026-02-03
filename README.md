@@ -42,11 +42,44 @@ If you are using Confluent serializers, ensure the serializer's `subject.name.st
 
 ## Usage examples (🔐 Authentication)
 
+### local.settings.json templates
+
+If you're using Azure Functions (or another host that supports `local.settings.json`-style local secrets), here are ready-to-use templates for the two most common setups.
+
+OAuth2 (Client Credentials):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SCHEMA_REGISTRY_URL": "https://your-registry.example.com",
+    "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
+    "OAUTH_CLIENT_ID": "your-client-id",
+    "OAUTH_CLIENT_SECRET": "your-client-secret",
+    "OAUTH_SCOPE": "registry.write"
+  }
+}
+```
+
+API Key (Confluent Cloud / Basic Auth):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SCHEMA_REGISTRY_URL": "https://your-confluent-cloud-registry",
+    "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",
+    "SCHEMA_REGISTRY_API_SECRET": "<API_SECRET>"
+  }
+}
+```
+
 ### 1) OAuth2 (Client Credentials / Bearer token)
 
 ```csharp
 // Minimal example using a token refresh function (client credentials flow)
 using System.Net.Http.Json;
+using System.Text.Json;
 
 var config = new SchemaRegistryConfig { Url = "https://your-registry.example.com" };
 
@@ -76,20 +109,7 @@ var client = new SchemaRegistryExtClient(config, TokenRefreshAsync);
 
 > Tip: You can also use MSAL or IdentityModel to get tokens and expose a `Func<Task<(string token, DateTime expiresAt)>>` accordingly.
 
-Local.settings.json example (OAuth):
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "SCHEMA_REGISTRY_URL": "https://your-registry.example.com",
-    "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
-    "OAUTH_CLIENT_ID": "your-client-id",
-    "OAUTH_CLIENT_SECRET": "your-client-secret",
-    "OAUTH_SCOPE": "registry.write"
-  }
-}
-```
+See the "local.settings.json templates" section above.
 
 Use these values in your token refresh implementation (or load them into environment variables before running tests/app):
 
@@ -112,18 +132,7 @@ config.Set("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
 var client = new SchemaRegistryExtClient(config);
 ```
 
-Local.settings.json example (API Key):
-
-```json
-{
-  "IsEncrypted": false,
-  "Values": {
-    "SCHEMA_REGISTRY_URL": "https://your-confluent-cloud-registry",
-    "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",
-    "SCHEMA_REGISTRY_API_SECRET": "<API_SECRET>"
-  }
-}
-```
+See the "local.settings.json templates" section above.
 
 To use the local settings values for the API key sample, either set `BasicAuthUserInfo` from the `SCHEMA_REGISTRY_API_KEY`/`SCHEMA_REGISTRY_API_SECRET` environment variables, or load them into the environment using the PowerShell/Bash examples above.
 
