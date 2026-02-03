@@ -11,12 +11,12 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
     
     - name: Setup .NET
-      uses: actions/setup-dotnet@v5
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
 
@@ -41,12 +41,12 @@ jobs:
     timeout-minutes: 30
 
     steps:
-    - uses: actions/checkout@v6
+    - uses: actions/checkout@v4
       with:
         fetch-depth: 0
 
     - name: Setup .NET
-      uses: actions/setup-dotnet@v5
+      uses: actions/setup-dotnet@v4
       with:
         dotnet-version: 10.0.x
 
@@ -98,6 +98,11 @@ jobs:
           --verbosity normal \
           --results-directory TestResults \
           --logger "trx;LogFileName=test-results.trx" \
+          --diag "TestResults/vstest.normal.diag.log" \
+          --blame-crash \
+          --blame-crash-dump-type full \
+          --blame-hang \
+          --blame-hang-timeout 5m \
           --filter "FullyQualifiedName!=JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.DIRegistrationTests.TokenManager_Is_Registered_When_TokenFunc_Provided"
 
     - name: Test (diagnostics on failure)
@@ -129,21 +134,24 @@ jobs:
         ls -la TestResults || true
         echo "Find any .trx files:"
         find . -type f -name "*.trx" -print || true
+        echo "Find any vstest diagnostic logs:"
+        find . -type f -name "vstest*.log" -print || true
 
-    - name: Gather TRX files into canonical TestResults
+    - name: Gather test artifacts into canonical TestResults
       shell: bash
       run: |
         set -euo pipefail
         mkdir -p TestResults
-        echo "Searching for .trx files in workspace..."
-        mapfile -t files < <(find . -type f -name "*.trx" -print || true)
+        echo "Searching for test artifacts in workspace..."
+        mapfile -t files < <(find . -type f \( -name "*.trx" -o -name "vstest*.log" -o -name "Sequence.xml" -o -name "*.dmp" -o -name "*.hangdump" -o -name "*.crashdump" \) -print || true)
         if [ ${#files[@]} -eq 0 ]; then
-          echo "No .trx files found"
+          echo "No test artifacts found"
         else
-          echo "Copying ${#files[@]} .trx file(s) to ./TestResults"
+          echo "Copying ${#files[@]} file(s) to ./TestResults/collected (preserving paths)"
+          mkdir -p TestResults/collected
           for f in "${files[@]}"; do
             echo " - $f"
-            cp "$f" "TestResults/$(basename "$f")" || true
+            cp --parents "$f" TestResults/collected/ || true
           done
           echo "Destination contents:" ; ls -la TestResults || true
         fi
@@ -199,7 +207,7 @@ jobs:
 
     - name: Upload TestResults (including blame)
       if: success() || failure()
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@v4
       with:
         name: testresults
         path: TestResults/
