@@ -1,10 +1,13 @@
-# JohBloch.ConfluentKafka.SchemaRegistryClient
+# JohBloch.ConfluentKafka.SchemaRegistryExtClient
 
-Client library for Confluent Kafka Schema Registry.
+Extended client library for Confluent Kafka Schema Registry with DI integration, caching, token refresh support, and optional OpenTelemetry metrics.
 
 ## Features
-- .NET Standard support
-- Easy integration with Kafka
+- Targets `net8.0` and `net10.0`
+- Easy integration with Microsoft DI (`AddSchemaRegistryExtClient`)
+- Optional token refresh (OAuth/custom bearer token) via delegate or DI-provided `ITokenManager`
+- Subject naming strategies aligned with Confluent serializer configuration
+- Optional OpenTelemetry-compatible metrics
 
 ## Getting Started
 See [docs/usage.md](docs/usage.md) for examples of connecting to Schema Registry with API Key, OAuth, or custom token refresh.
@@ -27,6 +30,8 @@ var options = new SchemaClientOptions
 };
 var client = new SchemaRegistryExtClient(config, tokenRefreshFunc, cache, options);
 ```
+
+If you need custom subject naming logic, you can provide a concrete implementation via `SchemaClientOptions.SubjectNameStrategyImplementation` (this takes precedence over the enum).
 
 If you are using Confluent serializers, ensure the serializer's `subject.name.strategy` setting matches this option to avoid subject mismatches.
 
@@ -121,19 +126,6 @@ Local.settings.json example (API Key):
 ```
 
 To use the local settings values for the API key sample, either set `BasicAuthUserInfo` from the `SCHEMA_REGISTRY_API_KEY`/`SCHEMA_REGISTRY_API_SECRET` environment variables, or load them into the environment using the PowerShell/Bash examples above.
-### 2) API Key (Confluent Cloud / Basic Auth)
-
-```csharp
-// Confluent Cloud: use the API key and secret as basic auth credentials
-var config = new SchemaRegistryConfig { Url = "https://your-confluent-cloud-registry" };
-// Option A: set BasicAuthUserInfo property
-config.BasicAuthUserInfo = "<API_KEY>:<API_SECRET>";
-
-// Option B: set via config.Set
-config.Set("basic.auth.user.info", "<API_KEY>:<API_SECRET>");
-
-var client = new SchemaRegistryExtClient(config);
-```
 
 ---
 
