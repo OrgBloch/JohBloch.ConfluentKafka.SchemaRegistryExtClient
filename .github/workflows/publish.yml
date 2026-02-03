@@ -59,7 +59,6 @@ jobs:
         set -euo pipefail
         mkdir -p TestResults
         dotnet test ./tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests/JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests.csproj \
-          --no-build \
           --configuration Release \
           --verbosity normal \
           --results-directory TestResults \
@@ -74,35 +73,36 @@ jobs:
     - name: Debug test artifacts
       run: |
         echo "List TestResults folder:"
-        ls -la "$GITHUB_WORKSPACE/TestResults" || true
+        ls -la TestResults || true
         echo "Find any .trx files:"
-        find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true
+        find . -type f -name "*.trx" -print || true
 
     - name: Gather TRX files into canonical TestResults
       shell: bash
       run: |
         set -euo pipefail
-        mkdir -p "$GITHUB_WORKSPACE/TestResults"
+        mkdir -p TestResults
         echo "Searching for .trx files in workspace..."
-        mapfile -t files < <(find "$GITHUB_WORKSPACE" -type f -name "*.trx" -print || true)
+        mapfile -t files < <(find . -type f -name "*.trx" -print || true)
         if [ ${#files[@]} -eq 0 ]; then
           echo "No .trx files found"
         else
-          echo "Copying ${#files[@]} .trx file(s) to $GITHUB_WORKSPACE/TestResults"
+          echo "Copying ${#files[@]} .trx file(s) to ./TestResults"
           for f in "${files[@]}"; do
             echo " - $f"
-            cp "$f" "$GITHUB_WORKSPACE/TestResults/$(basename "$f")" || true
+            cp "$f" "TestResults/$(basename "$f")" || true
           done
-          echo "Destination contents:" ; ls -la "$GITHUB_WORKSPACE/TestResults" || true
+          echo "Destination contents:" ; ls -la TestResults || true
         fi
 
     - name: Test Report
       uses: dorny/test-reporter@v2
-      if: success() || failure()
+      if: ${{ !cancelled() }}
       with:
         name: Test Results
         path: '**/*.trx'
         reporter: dotnet-trx
+        fail-on-empty: 'false'
 
     - name: Upload TestResults (including blame)
       if: success() || failure()
