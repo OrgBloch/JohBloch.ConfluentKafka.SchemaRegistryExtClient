@@ -19,3 +19,6 @@ build/
 # Others
 *.log
 TestResults/
+
+# Local settings (often contain secrets)
+**/local.settings.json

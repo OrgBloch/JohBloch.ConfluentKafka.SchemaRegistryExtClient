@@ -8,10 +8,12 @@ Minimal runnable sample demonstrating:
 How to run:
 
 1. Open a terminal at `samples/SampleApp`
-2. Create a `local.settings.json` file in the sample folder (example below) or set equivalent environment variables.
-3. dotnet run
+2. Create a `local.settings.json` file in the sample folder (you can start from `local.settings.json.template`).
+3. `dotnet run`
 
-The sample will attempt to call a Schema Registry at `http://localhost:8081`. If none is available the sample logs will show the error but the app will still run (safe default behavior). Replace `TokenRefreshAsync` with your real OAuth flow in production (MSAL/IdentityModel examples are mentioned in the main README).
+The sample will attempt to call a Schema Registry at `http://localhost:8081`. If none is available the sample logs will show the error but the app will still run (safe default behavior).
+
+The app automatically loads settings from `local.settings.json` (Azure Functions style) if the file exists, but environment variables also work.
 
 Example `local.settings.json` (OAuth):
 
@@ -43,7 +45,7 @@ Example `local.settings.json` (API Key):
 }
 ```
 
-Load local.settings values into environment variables (PowerShell):
+Optional: load `local.settings.json` values into environment variables (PowerShell):
 
 ```powershell
 $json = Get-Content local.settings.json | ConvertFrom-Json

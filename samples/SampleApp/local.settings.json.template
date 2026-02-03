@@ -1,0 +1,20 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "SCHEMA_REGISTRY_URL": "http://localhost:8081",
+
+    // OAuth2 (Client Credentials)
+    "OAUTH_TOKEN_ENDPOINT": "https://identity.example.com/oauth2/token",
+    "OAUTH_CLIENT_ID": "your-client-id",
+    "OAUTH_CLIENT_SECRET": "your-client-secret",
+    "OAUTH_SCOPE": "registry.write",
+
+    // Confluent Cloud OAuth extensions (required for some setups)
+    "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
+    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx"
+
+    // API Key (alternative to OAuth2)
+    // "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",
+    // "SCHEMA_REGISTRY_API_SECRET": "<API_SECRET>"
+  }
+}
