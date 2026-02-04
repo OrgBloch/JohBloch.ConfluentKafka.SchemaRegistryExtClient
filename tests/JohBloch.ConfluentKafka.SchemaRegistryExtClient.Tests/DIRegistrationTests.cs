@@ -89,5 +89,21 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Tests
             Assert.Equal(2, createCount);
             Assert.NotSame(c1, c2);
         }
+
+        [Fact]
+        public void TokenManager_Is_Registered_When_DI_Based_TokenFunc_Provided()
+        {
+            var services = new ServiceCollection();
+            var config = new SchemaRegistryConfig { Url = "http://localhost:8081" };
+
+            services.AddSchemaRegistryExtClient(
+                config,
+                tokenRefreshFunc: _ => Task.FromResult(("t", DateTime.UtcNow.AddMinutes(10))));
+
+            Assert.Contains(services, d => d.ServiceType == typeof(ITokenManager));
+            Assert.Contains(services, d => d.ServiceType == typeof(ISchemaRegistryExtClient));
+            Assert.Contains(services, d => d.ImplementationType == typeof(JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient)
+                || d.ImplementationFactory != null && d.ServiceType == typeof(JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services.SchemaRegistryExtClient));
+        }
     }
 }
