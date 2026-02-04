@@ -162,6 +162,89 @@ services.AddSchemaRegistryExtClient(config, tokenRefreshFunc: null);
 ## Getting Started
 See [docs/usage.md](docs/usage.md) for examples of connecting to Schema Registry with API Key, OAuth, or custom token refresh.
 
+## Using this library from another library (e.g. ConfluentKafkaProducerClient)
+It’s safe and common to depend on `JohBloch.ConfluentKafka.SchemaRegistryExtClient` from another reusable library.
+
+Best practice is:
+- Your reusable library exposes **one** `AddXyz(...)` extension method.
+- That method **registers** dependencies into the host container, but never calls `BuildServiceProvider()`.
+- The final app/host calls `AddXyz(...)` once.
+
+Example (inside your producer library):
+
+```csharp
+using Confluent.SchemaRegistry;
+using Microsoft.Extensions.DependencyInjection;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
+
+public sealed class ProducerClientOptions
+{
+  public required SchemaRegistryConfig SchemaRegistryConfig { get; init; }
+  public Func<IServiceProvider, Task<(string token, DateTime expiresAt)>>? SchemaRegistryTokenRefresh { get; init; }
+  public Action<SchemaClientOptions>? ConfigureSchemaClient { get; init; }
+}
+
+public static class ServiceCollectionExtensions
+{
+  public static IServiceCollection AddConfluentKafkaProducerClient(
+    this IServiceCollection services,
+    Action<ProducerClientOptions> configure)
+  {
+    var opts = new ProducerClientOptionsBuilder().Build(configure);
+
+    // Forward Schema Registry registration to the host container.
+    if (opts.SchemaRegistryTokenRefresh != null)
+    {
+      services.AddSchemaRegistryExtClient(
+        opts.SchemaRegistryConfig,
+        tokenRefreshFunc: opts.SchemaRegistryTokenRefresh,
+        configure: opts.ConfigureSchemaClient);
+    }
+    else
+    {
+      services.AddSchemaRegistryExtClient(
+        opts.SchemaRegistryConfig,
+        tokenRefreshFunc: null,
+        configure: opts.ConfigureSchemaClient);
+    }
+
+    // Then register your own producer client(s) that depend on ISchemaRegistryExtClient/ISchemaRegistrar.
+    // services.AddSingleton<IConfluentKafkaProducerClient, ConfluentKafkaProducerClient>();
+
+    return services;
+  }
+
+  private sealed class ProducerClientOptionsBuilder
+  {
+    public ProducerClientOptions Build(Action<ProducerClientOptions> configure)
+      => throw new NotImplementedException();
+  }
+}
+```
+
+In the final app/host you can now do:
+
+```csharp
+services.AddHttpClient("oauth");
+
+services.AddConfluentKafkaProducerClient(opts =>
+{
+  opts.SchemaRegistryConfig = new SchemaRegistryConfig { Url = "https://your-registry" };
+  opts.SchemaRegistryTokenRefresh = async sp =>
+  {
+    var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("oauth");
+    // call token endpoint, then return (token, expiresAt)
+    return ("token", DateTime.UtcNow.AddHours(1));
+  };
+  opts.ConfigureSchemaClient = schemaOpts =>
+  {
+    schemaOpts.LogicalCluster = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_CLUSTER");
+    schemaOpts.IdentityPoolId = Environment.GetEnvironmentVariable("OAUTH_IDENTITY_POOL_ID");
+  };
+});
+```
+
 ## Subject Name Strategy
 You can configure how subjects are derived by the client using `SchemaClientOptions.SubjectNameStrategy`. This aligns subject naming with serializer configuration (for example, the serializer setting `subject.name.strategy`).
 
@@ -288,7 +371,27 @@ var sp = services.BuildServiceProvider();
 var client = sp.GetRequiredService<ISchemaRegistryExtClient>();
 ```
 
-> Tip: You can also use MSAL or IdentityModel to get tokens and expose a `Func<Task<(string token, DateTime expiresAt)>>` accordingly.
+> Tip: If you want to use `IHttpClientFactory` (recommended), use the overload that receives `IServiceProvider`:
+>
+> ```csharp
+> services.AddHttpClient("oauth");
+>
+> services.AddSchemaRegistryExtClient(
+>   config,
+>   tokenRefreshFunc: async sp =>
+>   {
+>     var http = sp.GetRequiredService<IHttpClientFactory>().CreateClient("oauth");
+>     // call token endpoint, then return (token, expiresAt)
+>     return ("token", DateTime.UtcNow.AddHours(1));
+>   },
+>   configure: opts =>
+>   {
+>     opts.LogicalCluster = Environment.GetEnvironmentVariable("OAUTH_LOGICAL_CLUSTER");
+>     opts.IdentityPoolId = Environment.GetEnvironmentVariable("OAUTH_IDENTITY_POOL_ID");
+>   });
+> ```
+>
+> You can also use MSAL or IdentityModel to get tokens and return `(token, expiresAt)`.
 
 See the "local.settings.json templates" section above.
 
