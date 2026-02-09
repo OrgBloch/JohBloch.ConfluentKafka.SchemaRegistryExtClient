@@ -146,6 +146,149 @@ Schema Registry auth tokens often expire. If you pass a token refresh delegate (
 
 This enables running `SchemaRegistryExtClient` as a singleton in DI for days/weeks without manual recycling.
 
+### Example: extension method (env vars + MSAL client credentials)
+
+This example shows a reusable `IServiceCollection` extension you can use in Azure Functions or other hosts where settings are typically provided as environment variables.
+
+It:
+- Reads `SchemaRegistry:*` settings from environment variables
+- Uses MSAL (client credentials flow) to get OAuth access tokens
+- Registers `SchemaRegistryExtClient` with token refresh enabled
+
+```csharp
+using System;
+using System.Threading.Tasks;
+using Confluent.SchemaRegistry;
+using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Identity.Client;
+
+namespace SRTimerFunction
+{
+  public static class SchemaRegistryServiceCollectionExtensions
+  {
+    public static IServiceCollection AddSchemaRegistryFromEnvironment(this IServiceCollection services)
+    {
+      if (services == null) throw new ArgumentNullException(nameof(services));
+
+      static string Env(string key) => Environment.GetEnvironmentVariable(key)
+        ?? throw new InvalidOperationException($"Missing env var: {key}");
+
+      static string? EnvOpt(string key) => Environment.GetEnvironmentVariable(key);
+
+      var config = new SchemaRegistryConfig
+      {
+        Url = Env("SchemaRegistry:Url")
+      };
+
+      // Use bearer token auth against Confluent Schema Registry
+      config.BearerAuthCredentialsSource = BearerAuthCredentialsSource.StaticToken;
+
+      var logicalCluster = EnvOpt("SchemaRegistry:LogicalCluster");
+      var identityPoolId = EnvOpt("SchemaRegistry:IdentityPoolId");
+
+      // MSAL-based client credentials flow for acquiring access tokens
+      var authority = Env("SchemaRegistry:Authority");
+      var clientId = Env("SchemaRegistry:ClientId");
+      var clientSecret = Env("SchemaRegistry:ClientSecret");
+      var scope = Env("SchemaRegistry:Scope");
+
+      var scopes = scope.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+      if (scopes.Length == 0)
+      {
+        throw new InvalidOperationException("SchemaRegistry:Scope must contain at least one scope.");
+      }
+
+      var msalApp = ConfidentialClientApplicationBuilder
+        .Create(clientId)
+        .WithAuthority(authority)
+        .WithClientSecret(clientSecret)
+        .Build();
+
+      Func<Task<(string token, DateTime expiresAt)>> tokenRefreshFunc = async () =>
+      {
+        var result = await msalApp
+          .AcquireTokenForClient(scopes)
+          .ExecuteAsync()
+          .ConfigureAwait(false);
+
+        return (result.AccessToken, result.ExpiresOn.UtcDateTime);
+      };
+
+      services.AddSchemaRegistryExtClient(
+        config,
+        tokenRefreshFunc,
+        opts =>
+        {
+          // Confluent Cloud OAuth extensions (optional)
+          opts.LogicalCluster = logicalCluster;
+          opts.IdentityPoolId = identityPoolId;
+        });
+
+      return services;
+    }
+  }
+}
+```
+
+Packages you typically need for this example:
+
+```bash
+dotnet add package Microsoft.Identity.Client
+```
+
+### Azure Functions (.NET isolated): `local.settings.json` + `Program.cs`
+
+In Azure Functions, configuration is typically injected via environment variables. During local development, Functions reads these from `local.settings.json`.
+
+Important:
+- Do **not** commit `local.settings.json` with real secrets. Keep it local and use placeholders.
+- `local.settings.json` is only for local development; Azure uses App Settings.
+
+Example `local.settings.json` (anonymized):
+
+```json
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+
+    "SchemaRegistry:Url": "https://<your-schema-registry>",
+    "SchemaRegistry:ClientId": "<client-id-guid>",
+    "SchemaRegistry:ClientSecret": "<client-secret>",
+    "SchemaRegistry:Scope": "api://<client-id-guid>/.default",
+    "SchemaRegistry:Authority": "https://login.microsoftonline.com/<tenant-id-guid>",
+    "SchemaRegistry:LogicalCluster": "<logical-cluster>",
+    "SchemaRegistry:IdentityPoolId": "<identity-pool-id>",
+
+    "Kafka:BootstrapServers": "<your-kafka-bootstrap-servers>",
+    "Kafka:GroupId": "<your-consumer-group>",
+    "Kafka:Topic": "<your-topic-name>",
+    "Kafka:AutoOffsetReset": "Earliest",
+    "Kafka:EnableAutoCommit": "true"
+  }
+}
+```
+
+Example `Program.cs` for Functions (minimal):
+
+```csharp
+using Microsoft.Azure.Functions.Worker.Builder;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using SRTimerFunction;
+
+var builder = FunctionsApplication.CreateBuilder(args);
+
+builder.ConfigureFunctionsWebApplication();
+
+// Schema Registry configuration is encapsulated in SchemaRegistryServiceCollectionExtensions
+builder.Services.AddSchemaRegistryFromEnvironment();
+
+builder.Build().Run();
+```
+
 ### What if I don't provide a token refresh method?
 Nothing special happens: the library will not create/use a `TokenManager`, and it will call Schema Registry using only what you configured on `SchemaRegistryConfig` (for example API key / basic auth).
 
