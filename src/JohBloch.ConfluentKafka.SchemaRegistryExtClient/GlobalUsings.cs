@@ -12,4 +12,3 @@ global using Confluent.SchemaRegistry;
 global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
 global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
 global using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
-

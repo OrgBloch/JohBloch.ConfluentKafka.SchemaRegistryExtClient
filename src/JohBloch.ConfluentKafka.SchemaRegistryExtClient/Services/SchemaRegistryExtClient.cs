@@ -1,322 +1,340 @@
-using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models;
-using JohBloch.ConfluentKafka.SchemaRegistryExtClient.Interfaces;
+namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services;
 
-namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Services
+using ModelSubjectNameStrategy = JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy;
+
+public sealed class SchemaRegistryExtClient : ISchemaRegistryExtClient
 {
-    public class SchemaRegistryExtClient : ISchemaRegistryExtClient
+    private static readonly ISubjectNameStrategy TopicNameStrategy = new TopicNameStrategy();
+    private static readonly ISubjectNameStrategy TopicRecordNameStrategy = new TopicRecordNameStrategy();
+    private static readonly ISubjectNameStrategy RecordNameStrategy = new RecordNameStrategy();
+
+    private readonly SchemaRegistryConfig _config;
+    private readonly ISchemaCache? _cache;
+    private readonly SchemaClientOptions _options;
+    private readonly ISchemaRegistryClientFactory _clientFactory;
+
+    private readonly SemaphoreSlim _clientLock = new(1, 1);
+    private ISchemaRegistryClient? _client;
+    private string? _clientToken;
+    private bool _disposed;
+
+    private readonly RegistrarProxy _registrarProxy;
+    private ISchemaRegistrar? _uncachedRegistrar;
+
+    public ISchemaRegistrar Registrar => _registrarProxy;
+
+    public ITokenManager? TokenManager { get; }
+
+    public SchemaRegistryExtClient(
+        SchemaRegistryConfig config,
+        ITokenManager? tokenManager,
+        ISchemaCache? cache,
+        SchemaClientOptions? options = null,
+        ISchemaRegistryClientFactory? clientFactory = null)
     {
-        private readonly ITokenManager? _tokenManager;
-        private readonly ISchemaCache _cache;
-        private readonly bool _useTokenManager;
-        private SchemaRegistryConfig _config;
-        private string? _lastToken;
-        private ISchemaRegistryClient? _currentClient;
-        private readonly ISchemaRegistryClientFactory _clientFactory;
-        public ISchemaCache Cache => _cache;
-        private readonly ILogger<SchemaRegistryExtClient>? _logger;
-        private readonly SchemaClientOptions _options;
-        private readonly ISubjectNameStrategy? _subjectNameStrategy;
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        TokenManager = tokenManager;
+        _cache = cache;
+        _options = options ?? new SchemaClientOptions();
+        _clientFactory = clientFactory ?? new DefaultSchemaRegistryClientFactory();
 
-        // Cached registrar instance. When the underlying registry client is recreated
-        // (e.g., after token refresh), this will be refreshed to wrap the new client.
-        private ISchemaRegistrar? _registrar;
+        _registrarProxy = new RegistrarProxy();
 
-        // Create a registrar that wraps a concrete client instance.
-        private ISchemaRegistrar CreateRegistrar(ISchemaRegistryClient client)
+        ApplyConfluentCloudOAuthExtensions();
+    }
+
+    public SchemaRegistryExtClient(
+        SchemaRegistryConfig config,
+        Func<Task<(string token, DateTime expiresAt)>> tokenRefreshFunc,
+        ISchemaCache? cache,
+        SchemaClientOptions? options = null,
+        ISchemaRegistryClientFactory? clientFactory = null)
+        : this(
+            config,
+            tokenManager: new TokenManager(tokenRefreshFunc ?? throw new ArgumentNullException(nameof(tokenRefreshFunc))),
+            cache,
+            options,
+            clientFactory)
+    {
+    }
+
+    public async Task<ISchemaRegistryClient> GetClientAsync()
+    {
+        ThrowIfDisposed();
+
+        // Fetch token outside the lock to avoid blocking other callers while a refresh/network call is in progress.
+        var token = TokenManager != null
+            ? await TokenManager.GetTokenAsync().ConfigureAwait(false)
+            : null;
+
+        // If OAuth/token refresh is configured, we must not create a new client with an empty token.
+        // If a client already exists with a previous token, keep using it (transient refresh failure).
+        if (TokenManager != null && string.IsNullOrWhiteSpace(token))
         {
-            return new CachingSchemaRegistrar(new DefaultSchemaRegistrar(client), _cache, _logger as ILogger<CachingSchemaRegistrar>);
+            var existingClient = _client;
+            if (existingClient != null && !string.IsNullOrWhiteSpace(_clientToken))
+            {
+                return existingClient;
+            }
+
+            throw new InvalidOperationException("Token refresh returned an empty token; cannot create Schema Registry client.");
         }
 
-        /// <summary>
-        /// Public access to the registrar used by the client. This ensures a single
-        /// registrar instance is reused across operations and can be registered in DI.
-        /// </summary>
-        public ISchemaRegistrar Registrar => _registrar ??= (_currentClient != null ? CreateRegistrar(_currentClient) : CreateRegistrar(new CachedSchemaRegistryClient(_config)));
-
-        // New constructor that accepts an existing ITokenManager (allows DI to share a single instance)
-        public SchemaRegistryExtClient(
-            SchemaRegistryConfig config,
-            Interfaces.ITokenManager? tokenManager = null,
-            ISchemaCache? cache = null,
-            SchemaClientOptions? options = null,
-            ISchemaRegistryClientFactory? clientFactory = null)
+        await _clientLock.WaitAsync().ConfigureAwait(false);
+        try
         {
-            _options = options ?? new SchemaClientOptions();
-            _logger = _options.Logger as ILogger<SchemaRegistryExtClient>;
-            _useTokenManager = tokenManager != null;
-            _tokenManager = tokenManager; // reuse DI-registered TokenManager when available
-            _cache = cache ?? new InMemorySchemaCache(_options.CacheOptions, _logger as ILogger<InMemorySchemaCache>);
-            _config = config;
+            ThrowIfDisposed();
 
-            // Confluent Cloud OAuth extensions (optional). These are required for some Confluent Cloud OAuth setups.
-            if (!string.IsNullOrWhiteSpace(_options.LogicalCluster))
+            var tokenChanged = !string.Equals(_clientToken, token, StringComparison.Ordinal);
+            var needsNewClient = _client == null || (tokenChanged && !string.IsNullOrWhiteSpace(token));
+
+            if (!needsNewClient)
             {
-                _config.Set("bearer.auth.logical.cluster", _options.LogicalCluster);
-            }
-            if (!string.IsNullOrWhiteSpace(_options.IdentityPoolId))
-            {
-                _config.Set("bearer.auth.identity.pool.id", _options.IdentityPoolId);
+                return _client!;
             }
 
-            _clientFactory = clientFactory ?? new DefaultSchemaRegistryClientFactory();
-            // Resolve subject naming strategy implementation (explicit impl takes precedence)
-            _subjectNameStrategy = _options.SubjectNameStrategyImplementation ?? (_options.SubjectNameStrategy.HasValue ? _options.SubjectNameStrategy.Value switch
+            if (!string.IsNullOrWhiteSpace(token))
             {
-                JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.TopicName => new TopicNameStrategy(),
-                JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.TopicRecordName => new TopicRecordNameStrategy(),
-                JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.RecordName => new RecordNameStrategy(),
-                _ => null
-            } : null);
-
-            // Initialization of _currentClient is deferred to GetClientAsync to avoid sync-over-async
-            if (!_useTokenManager)
-            {
-                _currentClient = new CachedSchemaRegistryClient(_config);
+                // Prefer the strongly-typed property rather than setting string keys.
+                _config.BearerAuthToken = token;
             }
-            _logger?.LogInformation("SchemaClient initialized");
+
+            var newClient = _clientFactory.Create(_config);
+            var (uncachedRegistrar, effectiveRegistrar) = CreateRegistrars(newClient);
+
+            var oldClient = _client;
+            _client = newClient;
+            _clientToken = token;
+            _uncachedRegistrar = uncachedRegistrar;
+            _registrarProxy.SetInner(effectiveRegistrar);
+
+            oldClient?.Dispose();
+            return newClient;
+        }
+        finally
+        {
+            _clientLock.Release();
+        }
+    }
+
+    public async Task<string?> GetSchemaAsync(string subject, int version)
+    {
+        if (string.IsNullOrWhiteSpace(subject)) throw new ArgumentException("Subject cannot be null or empty", nameof(subject));
+
+        var key = GetSubjectVersionKey(subject, version);
+        if (TryGetFromCache(key, out var cached))
+        {
+            return cached?.Schema;
         }
 
-        // Backwards-compatible constructor that accepts a token refresh function and creates an internal TokenManager.
-        public SchemaRegistryExtClient(
-            SchemaRegistryConfig config,
-            Func<Task<(string token, DateTime expiresAt)>>? tokenRefreshFunc = null,
-            ISchemaCache? cache = null,
-            SchemaClientOptions? options = null,
-            ISchemaRegistryClientFactory? clientFactory = null)
-            : this(config, tokenRefreshFunc != null ? new TokenManager(tokenRefreshFunc) as Interfaces.ITokenManager : null, cache, options, clientFactory)
+        await GetClientAsync().ConfigureAwait(false);
+        var registered = await (_uncachedRegistrar ?? Registrar).GetRegisteredSchemaAsync(subject, version).ConfigureAwait(false);
+
+        SetCacheSubjectVersion(key, registered);
+
+        return registered?.Schema;
+    }
+
+    public async Task<string?> GetSchema(byte[] message)
+    {
+        if (message == null) throw new ArgumentNullException(nameof(message));
+        if (message.Length < 5) return null;
+        if (message[0] != 0) return null;
+
+        var id = (message[1] << 24) | (message[2] << 16) | (message[3] << 8) | message[4];
+        if (id <= 0) return null;
+
+        var key = GetIdKey(id);
+        if (TryGetFromCache(key, out var cached))
         {
+            return cached?.Schema;
         }
 
-        private readonly SemaphoreSlim _clientLock = new(1,1);
+        await GetClientAsync().ConfigureAwait(false);
+        var schema = await (_uncachedRegistrar ?? Registrar).GetSchemaAsync(id).ConfigureAwait(false);
 
-        public async Task<ISchemaRegistryClient> GetClientAsync()
+        SetCacheId(key, id, schema);
+
+        return schema?.SchemaString;
+    }
+
+    public async Task<int> RegisterSchemaAsync(
+        string topicOrSubject,
+        string schema,
+        string schemaType = "AVRO",
+        string? type = null,
+        string? recordType = null)
+    {
+        if (string.IsNullOrWhiteSpace(topicOrSubject)) throw new ArgumentException("Topic/subject cannot be null or empty", nameof(topicOrSubject));
+        if (string.IsNullOrWhiteSpace(schema)) throw new ArgumentException("Schema cannot be null or empty", nameof(schema));
+
+        await GetClientAsync().ConfigureAwait(false);
+        var subject = GetSubjectName(topicOrSubject, type, recordType);
+        var parsedType = ParseSchemaType(schemaType);
+        var schemaObj = new Schema(schema, parsedType);
+        return await Registrar.RegisterSchemaAsync(subject, schemaObj).ConfigureAwait(false);
+    }
+
+    public Task<int> RegisterValueSchemaAsync(string topic, string schema, string schemaType = "AVRO", string? recordType = null)
+        => RegisterSchemaAsync(topic, schema, schemaType, type: "value", recordType: recordType);
+
+    public Task<int> RegisterKeySchemaAsync(string topic, string schema, string schemaType = "AVRO", string? recordType = null)
+        => RegisterSchemaAsync(topic, schema, schemaType, type: "key", recordType: recordType);
+
+    public SchemaType ParseSchemaType(string? schemaType)
+    {
+        if (string.IsNullOrWhiteSpace(schemaType)) return SchemaType.Avro;
+        return Enum.TryParse<SchemaType>(schemaType, ignoreCase: true, out var parsed)
+            ? parsed
+            : SchemaType.Avro;
+    }
+
+    public string GetSubjectName(string topicOrSubject, string? type, string? recordType)
+    {
+        if (string.IsNullOrWhiteSpace(topicOrSubject)) throw new ArgumentException("Topic/subject cannot be null or empty", nameof(topicOrSubject));
+
+        var custom = _options.SubjectNameStrategyImplementation;
+        if (custom != null)
         {
-            // Fast path without token manager
-            if (!_useTokenManager)
-            {
-                if (_currentClient == null)
-                {
-                    _currentClient = _clientFactory.Create(_config);
-                    // Ensure registrar uses this concrete client
-                    _registrar = CreateRegistrar(_currentClient);
-                }
-                return _currentClient!;
-            }
-
-            var token = await _tokenManager!.GetTokenAsync();
-            if (_currentClient == null || token != _lastToken)
-            {
-                // Ensure only one thread recreates the client
-                await _clientLock.WaitAsync().ConfigureAwait(false);
-                try
-                {
-                    // re-check inside lock
-                    if (_currentClient == null || token != _lastToken)
-                    {
-                        _lastToken = token;
-                        _config.Set("bearer.auth.token", token);
-
-                        // Dispose the old client if it exists to prevent resource leaks
-                        _currentClient?.Dispose();
-                        _currentClient = _clientFactory.Create(_config);
-                        // Refresh registrar so it wraps the new client instance
-                        _registrar = CreateRegistrar(_currentClient);
-                    }
-                }
-                finally
-                {
-                    _clientLock.Release();
-                }
-            }
-            return _currentClient!;
+            return custom.GetSubjectName(topicOrSubject, type, recordType);
         }
 
-        public async Task<string?> GetSchemaAsync(string subject, int version)
+        var strategy = _options.SubjectNameStrategy;
+        if (strategy.HasValue)
         {
-            var key = $"{subject}:{version}";
-            if (_cache.TryGet(key, out var cachedSchema) && cachedSchema != null)
+            return strategy.Value switch
             {
-                _logger?.LogDebug($"Cache hit for subject/version: {key}");
-                return cachedSchema.Schema;
-            }
-
-            var client = await GetClientAsync();
-            try
-            {
-                var registered = await client.GetRegisteredSchemaAsync(subject, version);
-                var schema = registered.SchemaString;
-                var info = new CachedSchemaInfo
-                {
-                    Subject = subject,
-                    Id = registered.Id,
-                    Schema = schema,
-                    Type = null,
-                    SchemaType = null
-                };
-                _cache.Set(key, info);
-                _logger?.LogDebug($"Schema cached for subject/version: {key}");
-                return schema;
-            }
-            catch (Exception ex) when (ex is Confluent.SchemaRegistry.SchemaRegistryException || ex is KeyNotFoundException)
-            {
-                _logger?.LogWarning(ex, $"Schema not found for subject/version: {key}");
-                return null;
-            }
+                ModelSubjectNameStrategy.TopicName => TopicNameStrategy.GetSubjectName(topicOrSubject, type, recordType),
+                ModelSubjectNameStrategy.TopicRecordName => TopicRecordNameStrategy.GetSubjectName(topicOrSubject, type, recordType),
+                ModelSubjectNameStrategy.RecordName => RecordNameStrategy.GetSubjectName(topicOrSubject, type, recordType),
+                _ => TopicNameStrategy.GetSubjectName(topicOrSubject, type, recordType)
+            };
         }
 
-        /// <summary>
-        /// Helper to parse the schema id from the Confluent wire format (first 5 bytes).
-        /// </summary>
-        private static int ParseSchemaId(byte[] message)
+        // Legacy behavior: if recordType is present, default to topic-record naming.
+        if (!string.IsNullOrWhiteSpace(recordType))
         {
-            if (message == null || message.Length < 5)
-                throw new ArgumentException("Message must be at least 5 bytes.");
-            return (message[1] << 24) | (message[2] << 16) | (message[3] << 8) | message[4];
+            return TopicRecordNameStrategy.GetSubjectName(topicOrSubject, type, recordType);
         }
 
-        /// <summary>
-        /// Retrieves a schema based on the first 5 bytes of a message (Confluent wire format).
-        /// If present in cache it is returned; otherwise the token (if any) is refreshed and the schema is fetched from the registry.
-        /// Returns null when no schema is found.
-        /// </summary>
-        public async Task<string?> GetSchema(byte[] message)
-        {
-            var schemaId = ParseSchemaId(message);
-            var key = $"id:{schemaId}";
-            if (_cache.TryGet(key, out var cachedSchema) && cachedSchema != null)
-            {
-                _logger?.LogDebug($"Cache hit for id: {key}");
-                return cachedSchema.Schema;
-            }
+        return TopicNameStrategy.GetSubjectName(topicOrSubject, type, recordType);
+    }
 
-            var client = await GetClientAsync();
-            _registrar ??= CreateRegistrar(client);
-            try
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+
+        try
+        {
+            _client?.Dispose();
+        }
+        finally
+        {
+            _client = null;
+            _clientLock.Dispose();
+
+            if (TokenManager is IDisposable d)
             {
-                var schemaObj = await _registrar.GetSchemaAsync(schemaId);
-                if (schemaObj == null)
-                {
-                    return null;
-                }
-                return schemaObj.SchemaString;
-            }
-            catch (Exception ex) when (ex is Confluent.SchemaRegistry.SchemaRegistryException || ex is KeyNotFoundException)
-            {
-                _logger?.LogWarning(ex, $"Schema not found for id: {schemaId}");
-                return null;
+                d.Dispose();
             }
         }
+    }
 
-
-        /// <summary>
-        /// Registers a new schema in the Schema Registry and returns the assigned schema id. The schema is also cached.
-        /// </summary>
-        public async Task<int> RegisterSchemaAsync(
-            string topicOrSubject,
-            string schema,
-            string schemaType = "AVRO",
-            string? type = null,
-            string? recordType = null)
+    private (ISchemaRegistrar uncachedRegistrar, ISchemaRegistrar effectiveRegistrar) CreateRegistrars(ISchemaRegistryClient client)
+    {
+        var baseRegistrar = new DefaultSchemaRegistrar(client);
+        if (_cache == null)
         {
-            var client = await GetClientAsync();
-            _registrar ??= CreateRegistrar(client);
-            var subject = GetSubjectName(topicOrSubject, type, recordType);
-
-            var typeEnum = ParseSchemaType(schemaType);
-
-            var schemaId = await _registrar.RegisterSchemaAsync(subject, new Schema(schema, typeEnum));
-            _logger?.LogInformation($"Schema registered and cached for subject: {subject}, schemaId: {schemaId}");
-            return schemaId;
+            return (baseRegistrar, baseRegistrar);
         }
 
-        /// <summary>
-        /// Parses a schema type string (e.g. "AVRO", "PROTOBUF", "JSON") into the Confluent SchemaType enum.
-        /// Defaults to AVRO when parsing fails or when the value is null/empty.
-        /// </summary>
-        internal SchemaType ParseSchemaType(string? schemaType)
+        return (baseRegistrar, new CachingSchemaRegistrar(baseRegistrar, _cache));
+    }
+
+    private void ApplyConfluentCloudOAuthExtensions()
+    {
+        if (!string.IsNullOrWhiteSpace(_options.LogicalCluster))
         {
-            if (Enum.TryParse<SchemaType>(schemaType ?? string.Empty, true, out var parsed))
-            {
-                return parsed;
-            }
-            return SchemaType.Avro;
+            _config.Set("bearer.auth.logical.cluster", _options.LogicalCluster);
         }
 
-        /// <summary>
-        /// Registrerer et nyt value-skema for et topic og returnerer schemaId.
-        /// </summary>
-        public Task<int> RegisterValueSchemaAsync(string topic, string schema, string schemaType = "AVRO", string? recordType = null)
+        if (!string.IsNullOrWhiteSpace(_options.IdentityPoolId))
         {
-            return RegisterSchemaAsync(topic, schema, schemaType, "value", recordType);
+            _config.Set("bearer.auth.identity.pool.id", _options.IdentityPoolId);
+        }
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(nameof(SchemaRegistryExtClient));
+        }
+    }
+
+    private static string GetSubjectVersionKey(string subject, int version) => $"{subject}:{version}";
+
+    private static string GetIdKey(int id) => $"id:{id}";
+
+    private bool TryGetFromCache(string key, out CachedSchemaInfo? cached)
+    {
+        cached = null;
+        return _cache != null && _cache.TryGet(key, out cached);
+    }
+
+    private void SetCacheSubjectVersion(string key, CachedSchemaInfo? registered)
+    {
+        if (_cache == null) return;
+
+        _cache.Set(key, registered);
+        if (registered?.Id is int id)
+        {
+            _cache.Set(GetIdKey(id), registered);
+        }
+    }
+
+    private void SetCacheId(string key, int id, Schema? schema)
+    {
+        if (_cache == null) return;
+
+        if (schema == null)
+        {
+            _cache.Set(key, null);
+            return;
         }
 
-        /// <summary>
-        /// Registers a key schema for a topic and returns the schema id.
-        /// </summary>
-        public Task<int> RegisterKeySchemaAsync(string topic, string schema, string schemaType = "AVRO", string? recordType = null)
+        _cache.Set(key, new CachedSchemaInfo
         {
-            return RegisterSchemaAsync(topic, schema, schemaType, "key", recordType);
+            Subject = null,
+            Id = id,
+            Schema = schema.SchemaString,
+            Type = null,
+            SchemaType = schema.SchemaType.ToString()
+        });
+    }
+
+    private sealed class RegistrarProxy : ISchemaRegistrar
+    {
+        private ISchemaRegistrar? _inner;
+
+        public void SetInner(ISchemaRegistrar inner)
+        {
+            _inner = inner ?? throw new ArgumentNullException(nameof(inner));
         }
 
-        // Internal helper extracted to allow testing of subject name behavior. Matches the logic used when registering schemas.
-        internal string GetSubjectName(string topicOrSubject, string? type, string? recordType)
-        {
-            // If a concrete strategy implementation is provided, use it (supports DI/customization)
-            if (_subjectNameStrategy != null)
-            {
-                return _subjectNameStrategy.GetSubjectName(topicOrSubject, type, recordType);
-            }
+        public Task<CachedSchemaInfo?> GetRegisteredSchemaAsync(string subject, int version)
+            => (_inner ?? throw new InvalidOperationException("Schema registrar is not initialized.")).GetRegisteredSchemaAsync(subject, version);
 
-            var strategy = _options?.SubjectNameStrategy;
-            var lowerType = type?.ToLowerInvariant();
-            if (strategy.HasValue)
-            {
-                switch (strategy.Value)
-                {
-                    case JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.RecordName:
-                        if (!string.IsNullOrWhiteSpace(recordType)) return recordType!;
-                        break;
-                    case JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.TopicRecordName:
-                        if (!string.IsNullOrWhiteSpace(recordType)) return $"{topicOrSubject}-{recordType}";
-                        break;
-                    case JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models.SubjectNameStrategy.TopicName:
-                        if (lowerType == "key") return $"{topicOrSubject}-key";
-                        if (lowerType == "value") return $"{topicOrSubject}-value";
-                        return topicOrSubject;
-                }
-            }
+        public Task<Schema?> GetSchemaAsync(int id)
+            => (_inner ?? throw new InvalidOperationException("Schema registrar is not initialized.")).GetSchemaAsync(id);
 
-            // Legacy behavior: prefer topic-record when recordType present, otherwise topic-key/value
-            if (lowerType == "key") return !string.IsNullOrWhiteSpace(recordType) ? $"{topicOrSubject}-{recordType}" : $"{topicOrSubject}-key";
-            if (lowerType == "value") return !string.IsNullOrWhiteSpace(recordType) ? $"{topicOrSubject}-{recordType}" : $"{topicOrSubject}-value";
-            return topicOrSubject;
-        }
+        public Task<int> RegisterSchemaAsync(string subject, Schema schema)
+            => (_inner ?? throw new InvalidOperationException("Schema registrar is not initialized.")).RegisterSchemaAsync(subject, schema);
 
-
-
-
-
-
-
-
-        public void Dispose()
-        {
-            _currentClient?.Dispose();
-            _clientLock?.Dispose();
-        }
-
-        public async ValueTask DisposeAsync()
-        {
-            if (_currentClient != null)
-            {
-                await Task.Run(() => _currentClient.Dispose()).ConfigureAwait(false);
-            }
-            _clientLock?.Dispose();
-        }
-
-        /// <summary>
-        /// Exposes the token manager when one was provided via constructor/DI.
-        /// </summary>
-        public ITokenManager? TokenManager => _tokenManager;
+        public Task DeleteSchemaVersionAsync(string subject, int version)
+            => (_inner ?? throw new InvalidOperationException("Schema registrar is not initialized.")).DeleteSchemaVersionAsync(subject, version);
     }
 }
+
+
