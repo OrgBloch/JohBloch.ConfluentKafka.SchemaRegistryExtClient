@@ -1,0 +1,15 @@
+# Local Azure Functions settings (never commit secrets)
+local.settings.json
+
+# Build output
+bin/
+obj/
+
+# User-specific files
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# VS Code
+.vscode/

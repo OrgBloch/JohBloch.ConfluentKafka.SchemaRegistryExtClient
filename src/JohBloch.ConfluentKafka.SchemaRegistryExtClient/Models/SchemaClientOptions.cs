@@ -19,12 +19,6 @@ namespace JohBloch.ConfluentKafka.SchemaRegistryExtClient.Models
         public string? IdentityPoolId { get; set; }
 
         /// <summary>
-        /// Optional alias for <see cref="IdentityPoolId"/>.
-        /// Some documentation refers to this value as the logical pool id.
-        /// </summary>
-        public string? LogicalPoolId { get => IdentityPoolId; set => IdentityPoolId = value; }
-
-        /// <summary>
         /// Optional subject name strategy that aligns with serializer configuration
         /// (equivalent to serializer config 'subject.name.strategy'). If null, legacy behavior is used
         /// (topic-record when recordType present, otherwise topic-key/value).

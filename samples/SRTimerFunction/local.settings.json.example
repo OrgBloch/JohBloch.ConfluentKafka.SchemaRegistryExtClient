@@ -1,0 +1,21 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "dotnet-isolated",
+
+    "SchemaRegistry:Url": "https://<your-schema-registry>",
+    "SchemaRegistry:ClientId": "<client-id-guid>",
+    "SchemaRegistry:ClientSecret": "<client-secret>",
+    "SchemaRegistry:Scope": "api://<client-id-guid>/.default",
+    "SchemaRegistry:Authority": "https://login.microsoftonline.com/<tenant-id-guid>",
+    "SchemaRegistry:LogicalCluster": "<logical-cluster>",
+    "SchemaRegistry:IdentityPoolId": "<identity-pool-id>",
+
+    "Kafka:BootstrapServers": "<your-kafka-bootstrap-servers>",
+    "Kafka:GroupId": "<your-consumer-group>",
+    "Kafka:Topic": "<your-topic-name>",
+    "Kafka:AutoOffsetReset": "Earliest",
+    "Kafka:EnableAutoCommit": "true"
+  }
+}
