@@ -1,6 +1,12 @@
 {
   "IsEncrypted": false,
   "Values": {
+    // Kafka
+    "KAFKA_BOOTSTRAP_SERVERS": "localhost:9092",
+    "KAFKA_GROUP_ID": "sampleapp-group",
+    // "KAFKA_CLIENT_ID": "sampleapp",
+    // "KAFKA_AUTO_OFFSET_RESET": "Earliest",
+
     "SCHEMA_REGISTRY_URL": "http://localhost:8081",
 
     // OAuth2 (Client Credentials)
@@ -11,7 +17,7 @@
 
     // Confluent Cloud OAuth extensions (required for some setups)
     "OAUTH_LOGICAL_CLUSTER": "lkc-xxxxx",
-    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx"
+    "OAUTH_IDENTITY_POOL_ID": "pool-xxxxx",
 
     // API Key (alternative to OAuth2)
     // "SCHEMA_REGISTRY_API_KEY": "<API_KEY>",

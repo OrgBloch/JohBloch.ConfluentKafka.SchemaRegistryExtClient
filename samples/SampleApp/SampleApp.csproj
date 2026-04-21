@@ -8,8 +8,10 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\JohBloch.ConfluentKafka.SchemaRegistryExtClient\JohBloch.ConfluentKafka.SchemaRegistryExtClient.csproj" />
+    <PackageReference Include="Confluent.Kafka" Version="2.13.0" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="8.0.0" />
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
     <PackageReference Include="OpenTelemetry" Version="1.7.0" />
     <PackageReference Include="OpenTelemetry.Exporter.Console" Version="1.5.0" />
   </ItemGroup>
